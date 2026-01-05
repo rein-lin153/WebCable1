@@ -23,3 +23,16 @@ class CableCalcResponse(BaseModel):
     # 新增解释字段，告诉用户为什么选这么大
     selection_reason: str      # 例如: "因压降过大(6.5%)，已自动从 4mm² 升级为 6mm²"
     safe_ampacity: float       # 该电缆在当前温度下的实际载流量
+# --- 防伪检测请求模型 ---
+class AntiFakeRequest(BaseModel):
+    nominal_size: str = Field(..., description="标称截面，如 '2.5', '4.0'")
+    measured_weight: float = Field(..., gt=0, description="实测重量 (kg/100m)")
+    cable_type: str = Field("bv", description="默认针对家装BV线")
+
+# --- 防伪检测响应模型 ---
+class AntiFakeResponse(BaseModel):
+    is_pass: bool
+    standard_weight: float
+    diff_percent: float
+    message: str
+    risk_level: Literal["safe", "warning", "danger"]
