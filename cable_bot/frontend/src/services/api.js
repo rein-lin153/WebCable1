@@ -1,7 +1,7 @@
 // src/services/api.js
 
 // 假设后端运行在本地，生产环境需替换为真实域名
-const API_BASE_URL = "http://localhost:8000"; 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
 export const calculateCable = async (data) => {
   try {

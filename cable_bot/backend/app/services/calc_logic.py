@@ -1,37 +1,13 @@
-import math
-
-# --- 模拟数据库 (实际项目中可移至JSON文件或真实DB) ---
-# 简化版 IEC 60364 参考载流量 (Amps) - 30°C 空气敷设
-# Key: Size (mm2), Value: Amps
-AMPACITY_DB = {
-    "cu": {
-        "bv": {  # PVC
-            "1.5": 17, "2.5": 24, "4.0": 32, "6.0": 40, "10": 55, "16": 75, "25": 100
-        },
-        "yjv": { # XLPE
-            "1.5": 20, "2.5": 28, "4.0": 38, "6.0": 49, "10": 68, "16": 91, "25": 125, 
-            "35": 155, "50": 185, "70": 240, "95": 285
-        }
-    }
-}
-
-# 常见电缆标准重量 (Kg/100m) - 参考国标/IEC
-# 这里的阈值很关键，要能识别出“铜包铝”或“亏方”
-WEIGHT_STD_DB = {
-    "1.5": 2.0,   # 1.5平方大概重量
-    "2.5": 3.1,   # 2.5平方大概重量
-    "4.0": 4.6,
-    "6.0": 6.8
-}
+# backend/app/services/calc_logic.py
+from sqlalchemy.orm import Session
+from app.models.tables import CableSpec
 
 class ElectricalCalculator:
     
     @staticmethod
     def calculate_current(power: float, unit: str, voltage: str) -> float:
-        """根据功率计算电流"""
+        """根据功率计算电流 (纯数学逻辑，无需查库)"""
         # 1. 统一转换为 Amps
-        current = 0.0
-        
         if unit == "amps":
             return power
             
@@ -42,27 +18,29 @@ class ElectricalCalculator:
         pf = 0.85 # 功率因数假设
         
         if voltage == "380v":
-            current = (kw_val * 1000) / (380 * 1.732 * pf)
+            return round((kw_val * 1000) / (380 * 1.732 * pf), 2)
         else: # 220v
-            current = (kw_val * 1000) / (220 * pf)
-            
-        return round(current, 2)
+            return round((kw_val * 1000) / (220 * pf), 2)
 
     @staticmethod
-    def select_cable(current: float, material: str, cable_type: str) -> str:
-        """查表选择线径"""
-        table = AMPACITY_DB.get(material, {}).get(cable_type, {})
+    def select_cable(db: Session, current: float, material: str, cable_type: str) -> str:
+        """查数据库选择线径"""
+        # 查询符合材料和型号的所有规格，按载流量升序排列
+        specs = db.query(CableSpec).filter(
+            CableSpec.material == material,
+            CableSpec.insulation == cable_type
+        ).order_by(CableSpec.ampacity).all()
+
+        # 找到第一个大于计算电流的规格
+        for spec in specs:
+            if spec.ampacity >= current:
+                return spec.size
         
-        # 简单的查表逻辑：找到第一个大于计算电流的规格
-        for size, capacity in table.items():
-            if capacity >= current:
-                return size
-        
-        return "Over Limit (>95mm²)"
+        return "Over Limit (>Max)"
 
     @staticmethod
     def calculate_voltage_drop(current: float, distance: float, size_str: str, material: str, voltage: str) -> float:
-        """计算压降百分比"""
+        """计算压降百分比 (纯数学逻辑)"""
         # 简化电阻率 (Ohm/m/mm2): 铜 0.0175, 铝 0.028
         rho = 0.0175 if material == "cu" else 0.028
         
@@ -83,17 +61,25 @@ class ElectricalCalculator:
         return round(percent, 2)
 
     @staticmethod
-    def check_fake(size: str, measured: float) -> dict:
-        """防伪检测逻辑"""
-        std = WEIGHT_STD_DB.get(size)
-        if not std:
-            return {"status": "unknown", "msg": "规格不在数据库中"}
-            
-        # 允许误差范围 (例如 -5% 以内算合格，超过就是非标)
-        threshold = 0.95 
+    def check_fake(db: Session, size: str, measured: float, cable_type: str = 'bv') -> dict:
+        """防伪检测逻辑 (查数据库标准重量)"""
+        # 从数据库获取标准重量
+        # 目前主要针对 BV线 (单芯) 和 铜线 (Cu) 做防伪检测
+        spec = db.query(CableSpec).filter(
+            CableSpec.size == size, 
+            CableSpec.insulation == cable_type, 
+            CableSpec.material == 'cu'          
+        ).first()
+
+        if not spec or not spec.weight_per_100m:
+            return {"pass": False, "risk": "warning", "msg": "规格库缺失或无标准数据"}
+
+        std = spec.weight_per_100m
+        
+        # 允许误差范围
         ratio = measured / std
         
-        if ratio >= threshold:
+        if ratio >= 0.95:
             return {
                 "pass": True, 
                 "risk": "safe", 

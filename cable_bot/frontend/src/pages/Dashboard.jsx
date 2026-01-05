@@ -1,10 +1,21 @@
-import React from 'react';
+// src/pages/Dashboard.jsx
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Calculator, ShieldCheck, TrendingUp } from 'lucide-react';
 import FeatureCard from '../components/FeatureCard';
 
 const Dashboard = ({ onNavigate }) => {
   const { t } = useTranslation();
+  const [copperPrice, setCopperPrice] = useState(null);
+
+  useEffect(() => {
+    // 获取铜价
+    const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'; // 兼容本地开发
+    fetch(`${apiUrl}/api/v1/market/copper`)
+      .then(res => res.json())
+      .then(data => setCopperPrice(data))
+      .catch(err => console.error("Failed to fetch price", err));
+  }, []);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-24">
@@ -28,17 +39,31 @@ const Dashboard = ({ onNavigate }) => {
             <span>{t('copper_price')}</span>
           </div>
           <div className="mt-3 flex items-baseline space-x-1">
-            <span className="text-4xl font-black tracking-tight">$9,240</span>
+            <span className="text-4xl font-black tracking-tight">
+              {copperPrice ? `${copperPrice.USD.symbol}${copperPrice.USD.price.toLocaleString()}` : "$..."}
+            </span>
             <span className="text-sm font-medium text-blue-200">/ Ton</span>
           </div>
           <div className="mt-4 flex items-center space-x-2">
-            <span className="bg-green-500/20 text-green-300 text-xs px-2 py-1 rounded-md font-bold">+1.2%</span>
-            <span className="text-xs text-blue-300">LME Market Price</span>
+             {/* 动态显示涨跌幅 */}
+             {copperPrice ? (
+                <span className={`text-xs px-2 py-1 rounded-md font-bold ${
+                  copperPrice.USD.change >= 0 ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'
+                }`}>
+                  {copperPrice.USD.change > 0 ? '+' : ''}{copperPrice.USD.change}%
+                </span>
+             ) : (
+                <span className="bg-slate-500/20 text-slate-300 text-xs px-2 py-1 rounded-md font-bold">Loading...</span>
+             )}
+            
+            <span className="text-xs text-blue-300">
+               {copperPrice ? copperPrice.USD.source : "LME Market Price"}
+            </span>
           </div>
         </div>
         {/* 背景装饰 */}
         <div className="absolute -right-10 -top-10 w-40 h-40 bg-blue-500 rounded-full mix-blend-overlay filter blur-3xl opacity-50 animate-pulse"></div>
-        <div className="absolute -left-10 -bottom-10 w-40 h-40 bg-purple-500 rounded-fullHC mix-blend-overlay filter blur-3xl opacity-30"></div>
+        <div className="absolute -left-10 -bottom-10 w-40 h-40 bg-purple-500 rounded-full mix-blend-overlay filter blur-3xl opacity-30"></div>
       </div>
 
       {/* 常用工具 */}
