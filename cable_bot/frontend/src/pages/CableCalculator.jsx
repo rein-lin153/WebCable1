@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Calculator, Zap, AlertTriangle, CheckCircle, RotateCcw } from 'lucide-react';
-import { calculateCable } from '../services/api';
+import { ArrowLeft, Zap, AlertTriangle, CheckCircle, RotateCcw, Thermometer, Settings2, Info } from 'lucide-react';
+import { calculateCable } from '../services/api'; //
 
 const CableCalculator = ({ onBack }) => {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
+  const [showAdvanced, setShowAdvanced] = useState(false); // 控制高级选项折叠
   
   const [formData, setFormData] = useState({
     power: '',
@@ -14,7 +15,10 @@ const CableCalculator = ({ onBack }) => {
     voltage_type: '220v', 
     distance: 50,         
     material: 'cu',       
-    cable_type: 'yjv'     
+    cable_type: 'yjv',
+    // 新增高级参数 (默认匹配后端)
+    temperature: 40,
+    max_voltage_drop: 5
   });
 
   const handleCalculate = async () => {
@@ -28,16 +32,21 @@ const CableCalculator = ({ onBack }) => {
         voltage_type: formData.voltage_type,
         distance: parseFloat(formData.distance),
         material: formData.material,
-        cable_type: formData.cable_type
+        cable_type: formData.cable_type,
+        // 传递新参数
+        temperature: parseFloat(formData.temperature),
+        max_voltage_drop: parseFloat(formData.max_voltage_drop)
       };
+      
       const data = await calculateCable(payload);
       setResult(data);
+      
       // 平滑滚动到底部
       setTimeout(() => {
         document.getElementById('result-card')?.scrollIntoView({ behavior: 'smooth', block: 'end' });
       }, 100);
     } catch (error) {
-      alert("Error: Cannot connect to server.");
+      alert("Error: Cannot connect to server. Please ensure backend is running.");
     } finally {
       setLoading(false);
     }
@@ -45,7 +54,13 @@ const CableCalculator = ({ onBack }) => {
 
   const handleReset = () => {
     setResult(null);
-    setFormData({ ...formData, power: '' });
+    setFormData({ 
+      ...formData, 
+      power: '', 
+      distance: 50, // 重置距离
+      temperature: 40, 
+      max_voltage_drop: 5 
+    });
   };
 
   return (
@@ -67,7 +82,7 @@ const CableCalculator = ({ onBack }) => {
       {/* 表单区域 */}
       <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-6">
         
-        {/* 材质与类型 */}
+        {/* 1. 材质与类型 */}
         <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Conductor</span>
@@ -107,7 +122,7 @@ const CableCalculator = ({ onBack }) => {
             </div>
         </div>
 
-        {/* 电压选择 */}
+        {/* 2. 电压选择 */}
         <div className="space-y-2">
           <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Voltage System</span>
           <div className="grid grid-cols-2 gap-3">
@@ -128,7 +143,7 @@ const CableCalculator = ({ onBack }) => {
           </div>
         </div>
 
-        {/* 功率输入 - 加大 */}
+        {/* 3. 功率输入 */}
         <div className="space-y-2">
           <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t('input_power')}</span>
           <div className="relative">
@@ -154,24 +169,72 @@ const CableCalculator = ({ onBack }) => {
           </div>
         </div>
 
-        {/* 距离滑块 */}
-        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-          <div className="flex justify-between items-center mb-4">
-            <span className="text-xs font-bold text-slate-500 uppercase">{t('input_distance')}</span>
-            <div className="bg-white px-2 py-1 rounded border border-slate-200 text-xs font-bold text-slate-700">
-              {formData.distance} m
+        {/* 4. 距离输入 (已修改: 替换滑块为直接输入框) */}
+        <div className="space-y-2">
+          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t('input_distance')} (Meters)</span>
+          <div className="relative">
+            <input
+              type="number"
+              inputMode="decimal"
+              placeholder="Length"
+              value={formData.distance}
+              onChange={(e) => setFormData({...formData, distance: e.target.value})}
+              className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-5 pr-16 py-4 text-3xl font-black text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all placeholder:text-slate-300"
+            />
+            <div className="absolute right-5 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">
+                m
             </div>
           </div>
-          <input
-            type="range"
-            min="1"
-            max="500"
-            value={formData.distance}
-            onChange={(e) => setFormData({...formData, distance: e.target.value})}
-            className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-          />
         </div>
 
+        {/* 5. 高级参数 (可折叠) */}
+        <div className="border border-slate-100 rounded-2xl overflow-hidden">
+            <button 
+                onClick={() => setShowAdvanced(!showAdvanced)}
+                className="w-full flex items-center justify-between p-4 bg-slate-50 hover:bg-slate-100 transition-colors"
+            >
+                <div className="flex items-center space-x-2 text-slate-600">
+                    <Settings2 size={16} />
+                    <span className="text-xs font-bold uppercase">Advanced Settings</span>
+                </div>
+                <span className="text-xs text-blue-600 font-bold">{showAdvanced ? 'Hide' : 'Show'}</span>
+            </button>
+            
+            {showAdvanced && (
+                <div className="p-4 grid grid-cols-2 gap-4 bg-white animate-in slide-in-from-top-2">
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase">Temperature (°C)</label>
+                        <div className="relative">
+                            <input 
+                                type="number" 
+                                value={formData.temperature}
+                                onChange={(e) => setFormData({...formData, temperature: e.target.value})}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 pl-3 pr-8 font-bold text-slate-700 text-sm"
+                            />
+                            <Thermometer size={14} className="absolute right-3 top-3 text-slate-400" />
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase">Max Drop (%)</label>
+                        <div className="relative">
+                            <input 
+                                type="number" 
+                                value={formData.max_voltage_drop}
+                                onChange={(e) => setFormData({...formData, max_voltage_drop: e.target.value})}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 pl-3 pr-8 font-bold text-slate-700 text-sm"
+                            />
+                            <span className="absolute right-3 top-2.5 text-xs font-bold text-slate-400">%</span>
+                        </div>
+                    </div>
+                    <p className="col-span-2 text-[10px] text-slate-400 flex items-center">
+                        <Info size={12} className="mr-1" />
+                        柬埔寨夏季高温建议设为 40°C，长距离允许压降建议 5-7%
+                    </p>
+                </div>
+            )}
+        </div>
+
+        {/* 计算按钮 */}
         <button
           onClick={handleCalculate}
           disabled={loading || !formData.power}
@@ -188,22 +251,40 @@ const CableCalculator = ({ onBack }) => {
       {/* 结果展示 */}
       {result && (
         <div id="result-card" className="bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className={`h-2 w-full ${result.voltage_drop_percent > 5 ? 'bg-red-500' : 'bg-green-500'}`} />
+            {/* 顶部状态条 */}
+            <div className={`h-2 w-full ${result.voltage_drop_percent > formData.max_voltage_drop ? 'bg-red-500' : 'bg-green-500'}`} />
             
             <div className="p-6">
                 <div className="flex justify-between items-start mb-6">
                     <div>
                         <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Result Report</span>
-                        <h3 className={`text-lg font-bold mt-1 ${result.voltage_drop_percent > 5 ? 'text-red-600' : 'text-slate-800'}`}>
-                            {result.voltage_drop_percent > 5 ? '⚠️ Voltage Drop Issue' : '✅ Standard Compliant'}
+                        <h3 className={`text-lg font-bold mt-1 ${result.voltage_drop_percent > formData.max_voltage_drop ? 'text-red-600' : 'text-slate-800'}`}>
+                            {result.voltage_drop_percent > formData.max_voltage_drop ? '⚠️ Drop Limit Exceeded' : '✅ Standard Compliant'}
                         </h3>
                     </div>
-                    <div className={`p-2 rounded-full ${result.voltage_drop_percent > 5 ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
-                        {result.voltage_drop_percent > 5 ? <AlertTriangle size={24} /> : <CheckCircle size={24} />}
+                    <div className={`p-2 rounded-full ${result.voltage_drop_percent > formData.max_voltage_drop ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
+                        {result.voltage_drop_percent > formData.max_voltage_drop ? <AlertTriangle size={24} /> : <CheckCircle size={24} />}
                     </div>
                 </div>
 
-                <div className="bg-slate-50 rounded-2xl p-6 text-center border border-slate-100 mb-6">
+                {/* 选型理由 (新功能) */}
+                {result.selection_reason && (
+                   <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 mb-6 flex items-start space-x-2">
+                      <Info size={16} className="text-blue-600 mt-0.5 shrink-0" />
+                      <p className="text-xs text-blue-800 font-medium leading-relaxed">
+                        {result.selection_reason}
+                      </p>
+                   </div>
+                )}
+
+                {/* 核心推荐结果 */}
+                <div className="bg-slate-50 rounded-2xl p-6 text-center border border-slate-100 mb-6 relative">
+                    {/* 温度标签 */}
+                    <div className="absolute top-3 right-3 flex items-center space-x-1 bg-white px-2 py-1 rounded-md border border-slate-100 shadow-sm">
+                        <Thermometer size={12} className="text-amber-500" />
+                        <span className="text-[10px] font-bold text-slate-600">{formData.temperature}°C</span>
+                    </div>
+
                     <p className="text-xs text-slate-500 mb-2 uppercase tracking-wide">{t('result_recommend')}</p>
                     <div className="flex items-baseline justify-center space-x-2">
                         <span className="text-6xl font-black text-slate-900 tracking-tighter">
@@ -211,30 +292,42 @@ const CableCalculator = ({ onBack }) => {
                         </span>
                         <span className="text-xl text-slate-400 font-bold">mm²</span>
                     </div>
+                    
                     <div className="mt-2 inline-flex items-center px-3 py-1 rounded-md bg-white border border-slate-200 text-xs font-bold text-slate-500">
                        {formData.cable_type.toUpperCase()} / {formData.material === 'cu' ? 'Copper' : 'Alum'}
                     </div>
                 </div>
 
+                {/* 详细数据网格 */}
                 <div className="grid grid-cols-2 gap-4">
                     <div className="p-3 bg-white border border-slate-100 rounded-xl">
-                        <span className="text-[10px] text-slate-400 uppercase font-bold">Current</span>
+                        <span className="text-[10px] text-slate-400 uppercase font-bold">Load Current</span>
                         <p className="text-lg font-bold text-slate-700">{result.current_amps} A</p>
                     </div>
+                    {/* 新增: 安全载流量 */}
                     <div className="p-3 bg-white border border-slate-100 rounded-xl">
-                        <span className="text-[10px] text-slate-400 uppercase font-bold">Breaker</span>
-                        <p className="text-lg font-bold text-slate-700">{result.mcb_rating}</p>
+                        <span className="text-[10px] text-slate-400 uppercase font-bold">Safe Cap. (@{formData.temperature}°C)</span>
+                        <p className="text-lg font-bold text-green-600">{result.safe_ampacity} A</p>
                     </div>
+
+                    <div className="col-span-2 p-3 bg-white border border-slate-100 rounded-xl">
+                        <span className="text-[10px] text-slate-400 uppercase font-bold">Recommended Breaker (MCB)</span>
+                        <div className="flex items-center justify-between">
+                             <p className="text-lg font-bold text-slate-700">{result.mcb_rating}</p>
+                             <span className="text-[10px] text-slate-400 bg-slate-100 px-2 py-1 rounded">Rule: IB &lt; In &lt; Iz</span>
+                        </div>
+                    </div>
+
                     <div className="col-span-2 p-3 bg-white border border-slate-100 rounded-xl">
                         <div className="flex justify-between mb-1">
                             <span className="text-[10px] text-slate-400 uppercase font-bold">Voltage Drop</span>
-                            <span className={`text-xs font-bold ${result.voltage_drop_percent > 5 ? 'text-red-500' : 'text-green-600'}`}>
-                                {result.voltage_drop_percent}%
+                            <span className={`text-xs font-bold ${result.voltage_drop_percent > formData.max_voltage_drop ? 'text-red-500' : 'text-green-600'}`}>
+                                {result.voltage_drop_percent}% (Limit: {formData.max_voltage_drop}%)
                             </span>
                         </div>
                         <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
                             <div 
-                                className={`h-1.5 rounded-full ${result.voltage_drop_percent > 5 ? 'bg-red-500' : 'bg-green-500'}`} 
+                                className={`h-1.5 rounded-full ${result.voltage_drop_percent > formData.max_voltage_drop ? 'bg-red-500' : 'bg-green-500'}`} 
                                 style={{ width: `${Math.min(result.voltage_drop_percent * 10, 100)}%` }}
                             ></div>
                         </div>
