@@ -199,11 +199,10 @@ async def get_copper_price_api(db: Session = Depends(get_db)):
     }
 
 @app.post("/api/v1/calculate/sizing", response_model=CableCalcResponse)
-@app.post("/api/v1/calculate/sizing", response_model=CableCalcResponse)
 async def calculate_cable_sizing(request: CableCalcRequest, db: Session = Depends(get_db)):
-    # 1. 计算负载电流
+    # 1. 计算电流 (传入 PF)
     amps = ElectricalCalculator.calculate_current(
-        request.power, request.power_unit, request.voltage_type
+        request.power, request.power_unit, request.voltage_type, request.power_factor
     )
     
     # 2. 智能选型 (传入所有环境参数)
@@ -215,19 +214,19 @@ async def calculate_cable_sizing(request: CableCalcRequest, db: Session = Depend
         distance=request.distance,
         voltage=request.voltage_type,
         max_drop=request.max_voltage_drop,
-        ambient_temp=request.temperature
+        ambient_temp=request.temperature,
+        install_factor=request.installation_factor # 新参数
     )
     
-    # 3. 推荐断路器 (MCB)
-    # 规则: IB < In < Iz (负载电流 < 开关 < 电缆修正后载流量)
+    # 3. MCB 推荐
     mcb_val = math.ceil(amps * 1.2)
     standard_mcb = [6, 10, 16, 20, 25, 32, 40, 50, 63, 80, 100, 125, 160, 200, 250, 400]
     final_mcb = next((x for x in standard_mcb if x >= mcb_val), mcb_val)
     
-    # 简单的安全检查: 选的开关不能大于电缆的实际载流量
+    # 安全提示
     safe_limit = selection["safe_ampacity"]
     if safe_limit > 0 and final_mcb > safe_limit:
-        mcb_msg = f"{final_mcb}A (⚠️注意: 接近电缆极限 {safe_limit}A)"
+        mcb_msg = f"{final_mcb}A (⚠️警告: 开关大于电缆载流 {safe_limit}A)"
     else:
         mcb_msg = f"{final_mcb}A"
     

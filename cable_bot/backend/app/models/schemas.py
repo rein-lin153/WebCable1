@@ -1,28 +1,33 @@
 from pydantic import BaseModel, Field
 from typing import Literal, Optional
 
-# --- 电缆选型请求模型 (升级版) ---
+# --- V2.0 电缆选型请求模型 ---
 class CableCalcRequest(BaseModel):
+    # 1. 负载信息
     power: float = Field(..., gt=0, description="功率数值")
     power_unit: Literal["kw", "hp", "amps"] = Field(..., description="功率单位")
     voltage_type: Literal["220v", "380v"] = Field(..., description="电压等级")
-    distance: float = Field(..., gt=0, description="线路长度(米)")
-    material: Literal["cu", "al"] = Field("cu", description="材质: 铜/铝")
-    cable_type: Literal["yjv", "bv"] = Field("yjv", description="绝缘类型: YJV(XLPE)/BV(PVC)")
+    power_factor: float = Field(0.85, ge=0.1, le=1.0, description="功率因数 (电机0.8, 加热1.0)")
     
-    # 新增高级参数
-    temperature: Optional[float] = Field(40.0, description="环境温度 (默认柬埔寨 40°C)")
-    max_voltage_drop: Optional[float] = Field(5.0, description="最大允许压降% (默认 5%)")
+    # 2. 环境与敷设
+    distance: float = Field(..., gt=0, description="线路长度(米)")
+    temperature: float = Field(40.0, description="环境温度")
+    installation_factor: float = Field(1.0, description="敷设系数: 明装1.0, 穿管0.8, 直埋0.9")
+    max_voltage_drop: float = Field(5.0, description="允许压降%")
+    
+    # 3. 线缆参数
+    material: Literal["cu", "al"] = Field("cu", description="材质")
+    cable_type: Literal["yjv", "bv"] = Field("yjv", description="绝缘类型")
 
 class CableCalcResponse(BaseModel):
     current_amps: float
-    recommended_size: str      # 最终推荐规格
+    recommended_size: str
     voltage_drop_percent: float
     mcb_rating: str
+    selection_reason: str
+    safe_ampacity: float
+
     
-    # 新增解释字段，告诉用户为什么选这么大
-    selection_reason: str      # 例如: "因压降过大(6.5%)，已自动从 4mm² 升级为 6mm²"
-    safe_ampacity: float       # 该电缆在当前温度下的实际载流量
 # --- 防伪检测请求模型 ---
 class AntiFakeRequest(BaseModel):
     nominal_size: str = Field(..., description="标称截面，如 '2.5', '4.0'")
